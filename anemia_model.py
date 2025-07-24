@@ -36,22 +36,6 @@ plt.xlabel('Result')
 plt.ylabel('Count')
 plt.show()
 
-# Balance the dataset using downsampling
-from sklearn.utils import resample
-majorclass = data[data['Result'] == 0]
-minorclass = data[data['Result'] == 1]
-major_downsampled = resample(majorclass, replace=False, n_samples=len(minorclass), random_state=42)
-balanced_data = pd.concat([major_downsampled, minorclass])
-
-# Result distribution after balancing
-print("\nBalanced Result Distribution:")
-print(balanced_data['Result'].value_counts())
-balanced_data['Result'].value_counts().plot(kind='bar', color=['blue', 'green'])
-plt.title('Balanced Distribution of Result')
-plt.xlabel('Result')
-plt.ylabel('Count')
-plt.show()
-
 # Gender distribution
 print("\nGender Distribution:")
 print(data['Gender'].value_counts())
@@ -90,16 +74,34 @@ plt.show()
 X = data.drop("Result", axis=1)
 y = data["Result"]
 
-# Train-test split
+# Train-test split from the original imbalanced data. Stratify to maintain distribution.
 from sklearn.model_selection import train_test_split
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=20)
-print("\nTrain/Test Split Shapes:")
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=20, stratify=y)
+print("\nTrain/Test Split Shapes (before balancing):")
 print(X_train.shape, X_test.shape, y_train.shape, y_test.shape)
+
+# Downsample the majority class in the TRAINING set only to prevent data leakage
+from sklearn.utils import resample
+
+# Combine training data for resampling
+train_data = pd.concat([X_train, y_train], axis=1)
+
+majorclass = train_data[train_data['Result'] == 0]
+minorclass = train_data[train_data['Result'] == 1]
+
+major_downsampled = resample(majorclass, replace=False, n_samples=len(minorclass), random_state=42)
+balanced_train_data = pd.concat([major_downsampled, minorclass])
+
+print("\nBalanced Training Set Result Distribution:")
+print(balanced_train_data['Result'].value_counts())
+
+X_train = balanced_train_data.drop("Result", axis=1)
+y_train = balanced_train_data["Result"]
 
 # Feature scaling
 from sklearn.preprocessing import StandardScaler
 scaler = StandardScaler()
-X_train = scaler.fit_transform(X_train)
+X_train = scaler.fit_transform(X_train) # Fit and transform the training data
 X_test = scaler.transform(X_test)
 
 # Logistic Regression
@@ -153,9 +155,11 @@ print(classification_report(y_test, y_pred))
 
 # Test Prediction Example
 sample_input = [[0, 11.6, 22.3, 30.9, 74.5]]
-prediction = gbc_model.predict(sample_input)
+# Scale the sample input before prediction
+scaled_sample_input = scaler.transform(sample_input)
+prediction = gbc_model.predict(scaled_sample_input)
 print("\nSample Prediction:", prediction[0])
-if prediction[0] == 0:
+if prediction[0] == 0: 
     print("You don't have any Anemic Disease")
 else:
     print("You have Anemic Disease")
